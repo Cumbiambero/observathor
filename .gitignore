@@ -1,0 +1,35 @@
+# Build artifacts
+/build/
+/out/
+CMakeCache.txt
+CMakeFiles/
+*.dir/
+*.obj
+*.o
+*.pdb
+*.exe
+*.ilk
+*.log
+*.user
+*.vcxproj*
+/*.aps
+.ipch/
+*.db
+*.suo
+*.opensdf
+*.tlog
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated certs
+certs/
+filestore_test_output.ndjson
+build_imgui/
+*.lib
+*.dll
