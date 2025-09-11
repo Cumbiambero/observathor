@@ -1,23 +1,51 @@
-# Build artifacts
-/build/
-/out/
+# Build directories
+build/
+out/
+build*/
+
+# CMake generated files
 CMakeCache.txt
 CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+_deps/
+**/CMakeFiles/
+**/_deps/
+**/cmake_install.cmake
+**/CTestTestfile.cmake
+
+# Visual Studio files
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+.vs/
+x64/
+Debug/
+Release/
+RelWithDebInfo/
+MinSizeRel/
 *.dir/
+
+# Object files and executables
 *.obj
 *.o
 *.pdb
 *.exe
 *.ilk
+*.lib
+*.dll
+*.tlog
+
+# Other IDE/build artifacts
 *.log
 *.user
-*.vcxproj*
-/*.aps
+*.aps
 .ipch/
 *.db
 *.suo
 *.opensdf
-*.tlog
 
 # IDE
 .vscode/
@@ -27,9 +55,28 @@ CMakeFiles/
 .DS_Store
 Thumbs.db
 
-# Generated certs
+# Generated certs and runtime files
 certs/
 filestore_test_output.ndjson
 build_imgui/
-*.lib
-*.dll
+build_refactor/
+build_refactor_ms/
+build_refactor*/
+
+# Local runtime/UI state
+imgui.ini
+
+# Test / temp outputs
+transactions.ndjson
+captures.ndjson
+*.ndjson
+observathor_root_ca.pem
+*.pem
+
+# Backup files
+*~
+*.bak
+*.tmp
+
+# Scripts working dirs
+observathor_mitm_test_*/

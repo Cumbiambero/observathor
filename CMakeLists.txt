@@ -7,7 +7,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(OBSERVATHOR_BUILD_TESTS "Build tests" ON)
 option(OBSERVATHOR_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
-option(OBSERVATHOR_ENABLE_IMGUI "Build ImGui prototype UI" OFF)
+option(OBSERVATHOR_PREFER_STATIC_OPENSSL "Statically link OpenSSL when available" ON)
+
 
 # Enable modules later; for now use traditional includes
 
@@ -22,14 +23,24 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(fmt)
 
-if (OBSERVATHOR_ENABLE_IMGUI)
-    FetchContent_Declare(
-        imgui
-        GIT_REPOSITORY https://github.com/ocornut/imgui.git
-        GIT_TAG v1.90.9
-    )
-    FetchContent_MakeAvailable(imgui)
-endif()
+FetchContent_Declare(
+    imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG v1.90.9
+)
+FetchContent_MakeAvailable(imgui)
+
+# GLFW for cross-platform window + context
+FetchContent_Declare(
+    glfw
+    GIT_REPOSITORY https://github.com/glfw/glfw.git
+    GIT_TAG 3.4
+)
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(glfw)
 
 add_library(observathor_core
     src/core/net/IoContext.cpp
@@ -41,10 +52,31 @@ add_library(observathor_core
     src/core/proxy/TransactionLogObserver.cpp
     src/core/proxy/TransactionMemoryStore.cpp
     src/core/proxy/TransactionFileStore.cpp
+    src/core/proxy/SessionSerialization.cpp
+    src/core/proxy/CaptureGlobals.cpp
     src/core/http/HttpParser.cpp
+    src/core/http/ChunkedDecoder.cpp
     src/core/http/HostUtil.cpp
+    src/core/tls/TlsContext.cpp
     src/core/util/Logger.cpp
 )
+
+if (OBSERVATHOR_PREFER_STATIC_OPENSSL)
+    set(OPENSSL_USE_STATIC_LIBS TRUE)
+endif()
+find_package(OpenSSL REQUIRED)
+if (NOT OpenSSL_FOUND)
+    message(FATAL_ERROR "OpenSSL is required but was not found. Set OPENSSL_ROOT_DIR or provide vcpkg toolchain.")
+endif()
+message(STATUS "OpenSSL include dir: ${OPENSSL_INCLUDE_DIR}")
+message(STATUS "OpenSSL libraries: ${OPENSSL_LIBRARIES}")
+target_compile_definitions(observathor_core PUBLIC OBSERVATHOR_HAVE_OPENSSL=1)
+target_include_directories(observathor_core PUBLIC ${OPENSSL_INCLUDE_DIR})
+target_link_libraries(observathor_core PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+if (WIN32 AND OBSERVATHOR_PREFER_STATIC_OPENSSL)
+    # Static OpenSSL on Windows typically needs these system libs
+    target_link_libraries(observathor_core PRIVATE ws2_32 crypt32 secur32 bcrypt user32)
+endif()
 
 set_target_properties(observathor_core PROPERTIES OUTPUT_NAME observathor_core)
 
@@ -52,17 +84,33 @@ target_include_directories(observathor_core PUBLIC include)
 
 target_link_libraries(observathor_core PRIVATE fmt::fmt)
 
-if (OBSERVATHOR_ENABLE_IMGUI)
-    add_library(observathor_imgui_lib
-        ${imgui_SOURCE_DIR}/imgui.cpp
-        ${imgui_SOURCE_DIR}/imgui_draw.cpp
-        ${imgui_SOURCE_DIR}/imgui_tables.cpp
-        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-    )
-    target_include_directories(observathor_imgui_lib PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
-    # SDL2 + OpenGL loader left for future; placeholder executable will not link these backends yet.
-    add_executable(observathor_imgui apps/observathor_imgui_stub.cpp)
-    target_link_libraries(observathor_imgui PRIVATE observathor_core observathor_imgui_lib fmt::fmt)
+add_library(observathor_imgui_lib
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl2.cpp
+)
+target_include_directories(observathor_imgui_lib PUBLIC 
+    ${imgui_SOURCE_DIR} 
+    ${imgui_SOURCE_DIR}/backends 
+    ${glfw_SOURCE_DIR}/include)
+add_executable(observathor_imgui apps/observathor_imgui.cpp)
+target_link_libraries(observathor_imgui PRIVATE observathor_core observathor_imgui_lib glfw fmt::fmt)
+if (WIN32 AND OBSERVATHOR_PREFER_STATIC_OPENSSL)
+    target_link_libraries(observathor_imgui PRIVATE ws2_32 crypt32 secur32 bcrypt user32)
+endif()
+if (WIN32)
+    target_link_libraries(observathor_imgui PRIVATE opengl32)
+elseif(APPLE)
+    find_library(COCOA_LIB Cocoa)
+    find_library(IOKIT_LIB IOKit)
+    find_library(COREVIDEO_LIB CoreVideo)
+    target_link_libraries(observathor_imgui PRIVATE ${COCOA_LIB} ${IOKIT_LIB} ${COREVIDEO_LIB})
+else()
+    # On Linux glfw pulls required X11 / pthread / dl libs itself
+    target_link_libraries(observathor_imgui PRIVATE GL)
 endif()
 
 if (MSVC)
@@ -80,6 +128,9 @@ endif()
 add_executable(observathor_cli apps/observathor_cli.cpp)
 
 target_link_libraries(observathor_cli PRIVATE observathor_core fmt::fmt)
+if (WIN32 AND OBSERVATHOR_PREFER_STATIC_OPENSSL)
+    target_link_libraries(observathor_cli PRIVATE ws2_32 crypt32 secur32 bcrypt user32)
+endif()
 
 if (OBSERVATHOR_BUILD_TESTS)
     enable_testing()
@@ -92,4 +143,10 @@ if (OBSERVATHOR_BUILD_TESTS)
     add_executable(filestore_test tests/filestore_test.cpp)
     target_link_libraries(filestore_test PRIVATE observathor_core fmt::fmt)
     add_test(NAME filestore COMMAND filestore_test)
+    add_executable(chunked_test tests/chunked_test.cpp)
+    target_link_libraries(chunked_test PRIVATE observathor_core fmt::fmt)
+    add_test(NAME chunked COMMAND chunked_test)
+    add_executable(chunked_decoder_test tests/chunked_decoder_test.cpp)
+    target_link_libraries(chunked_decoder_test PRIVATE observathor_core fmt::fmt)
+    add_test(NAME chunked_decoder COMMAND chunked_decoder_test)
 endif()
