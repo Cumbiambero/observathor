@@ -46,7 +46,17 @@ std::optional<int> Socket::recv_some(std::vector<char>& buffer) {
 #else
     int r = static_cast<int>(::recv(handle, buffer.data(), buffer.size(), 0));
 #endif
-    if (r <= 0) return std::nullopt; return r;
+    if (r < 0) {
+#ifdef _WIN32
+    int err = WSAGetLastError();
+    if (err == WSAEWOULDBLOCK) return 0; // indicate non-blocking retry
+#else
+    if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
+#endif
+    return std::nullopt; // real error/closed
+    }
+    if (r == 0) return std::nullopt; // peer closed
+    return r;
 }
 bool Socket::send_all(std::string_view data) {
     if (!valid()) return false;

@@ -44,7 +44,7 @@ private:
             }
         }
     }
-    std::atomic<bool> enabled { false };
+    std::atomic<bool> enabled { true };
     mutable std::mutex mu;
     std::vector<std::string> allow_list;
     std::vector<std::string> deny_list;

@@ -25,5 +25,9 @@ private:
     std::shared_ptr<tls::TlsContext> tls_ctx; // may be null
     class MitmPolicy* policy { nullptr }; // non-owning
     void process();
+#ifdef OBSERVATHOR_HAVE_OPENSSL
+    bool can_attempt_mitm(const std::string& host);
+    void handle_ssl_mitm(const std::string& host, int port);
+#endif
 };
 }

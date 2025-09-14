@@ -25,6 +25,7 @@ Logger::Level parse_level(const std::string& v) {
 void print_help() {
     std::cout << "Usage: observathor_cli [--port N|-p N] [--log-level L] [--capture-bytes N] [--capture-file path]" << std::endl;
     std::cout << "                     [--enable-mitm] [--ca-cert path] [--ca-key path] [--export-ca file] [--export-ca-der file]" << std::endl;
+    std::cout << "  Use --enable-mitm to enable TLS interception (tunneling by default)." << std::endl;
 }
 }
 
@@ -43,6 +44,7 @@ int main(int argc, char** argv) {
     if (a == "--capture-bytes" && i + 1 < args.size()) { capture_bytes = static_cast<std::size_t>(std::stoull(args[++i])); continue; }
     if (a == "--capture-file" && i + 1 < args.size()) { capture_file = args[++i]; continue; }
     if (a == "--enable-mitm") { enableMitm = true; continue; }
+    if (a == "--disable-mitm") { /* deprecated, MITM disabled by default */ continue; }
     if (a == "--regenerate-ca") { regenerateCa = true; continue; }
     if (a == "--ca-cert" && i + 1 < args.size()) { caCertPath = args[++i]; continue; }
     if (a == "--ca-key" && i + 1 < args.size()) { caKeyPath = args[++i]; continue; }

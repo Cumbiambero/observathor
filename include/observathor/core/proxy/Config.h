@@ -12,7 +12,7 @@ struct Config {
     std::size_t globalMemoryBudget { 256 * 1024 * 1024 }; // total in‑RAM budget for captured bodies
 
     // TLS MITM settings
-    bool enableTlsMitm { false };              // master switch to intercept CONNECT and perform TLS MITM
+    bool enableTlsMitm { true };               // master switch to intercept CONNECT and perform TLS MITM
     const char* caCertPath { nullptr };        // path to root CA certificate (PEM) for signing issued leaf certs
     const char* caKeyPath { nullptr };         // path to root CA private key (PEM)
     bool generateCaIfMissing { true };         // auto-generate root CA if files not present

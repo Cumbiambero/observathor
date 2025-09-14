@@ -80,3 +80,4 @@ observathor_root_ca.pem
 
 # Scripts working dirs
 observathor_mitm_test_*/
+run_*

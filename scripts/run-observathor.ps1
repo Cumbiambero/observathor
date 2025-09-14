@@ -24,9 +24,9 @@ if($Help) {
     Write-Host "  -Help                         Show this help"
     Write-Host ""
     Write-Host "Examples:"
-    Write-Host "  .\run-observathor.ps1                                  # GUI on 127.0.0.1:8080"
-    Write-Host "  .\run-observathor.ps1 -Cli -ListenPort 3128           # CLI on port 3128"
-    Write-Host "  .\run-observathor.ps1 -Mitm -Allow '*.github.com'     # MITM for GitHub"
+    Write-Host "  .\run-observathor.ps1                                  # GUI tunneling-only on 127.0.0.1:8080"
+    Write-Host "  .\run-observathor.ps1 -Cli -ListenPort 3128           # CLI tunneling-only on port 3128"
+    Write-Host "  .\run-observathor.ps1 -Mitm -Allow '*.github.com'     # MITM for GitHub only"
     exit 0
 }
 

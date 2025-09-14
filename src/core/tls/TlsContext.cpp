@@ -16,10 +16,24 @@ std::shared_ptr<TlsContext> TlsContext::create(const CertConfig& cfg){
     SSL_load_error_strings();
 
     auto loadPemFile = [](const std::string& path){ return std::filesystem::exists(path); };
-    bool haveCert = !cfg.caCertPath.empty() && loadPemFile(cfg.caCertPath);
-    bool haveKey  = !cfg.caKeyPath.empty()  && loadPemFile(cfg.caKeyPath);
+    // Default paths if none provided
+    std::string caCertPath = cfg.caCertPath.empty() ? "observathor_root_ca.pem" : cfg.caCertPath;
+    std::string caKeyPath  = cfg.caKeyPath.empty()  ? "observathor_root_ca.key" : cfg.caKeyPath;
+
+    bool haveCert = loadPemFile(caCertPath);
+    bool haveKey  = loadPemFile(caKeyPath);
+    auto log_fpr = [&](X509* cert){
+        if(!cert) return;
+        unsigned char md[EVP_MAX_MD_SIZE]; unsigned int n=0;
+        if(!X509_digest(cert, EVP_sha256(), md, &n)) return;
+        std::string fp; fp.reserve(n*3);
+        static const char* h="0123456789ABCDEF"; for(unsigned i=0;i<n;++i){ unsigned char b=md[i]; fp.push_back(h[b>>4]); fp.push_back(h[b&0xF]); if(i+1<n) fp.push_back(':'); }
+        fprintf(stdout, "[INFO] %lld CA SHA256 fingerprint %s\n", (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count(), fp.c_str());
+    };
+
     if (!haveCert || !haveKey) {
-        if (!cfg.generateIfMissing) {
+    fprintf(stdout, "[INFO] %lld generating new root CA (cert=%s key=%s)\n", (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count(), caCertPath.c_str(), caKeyPath.c_str());
+    if (!cfg.generateIfMissing) {
             return ctx; // leave init_ok_ false
         }
         // Generate new self-signed root CA (very minimal; improvement later)
@@ -46,13 +60,24 @@ std::shared_ptr<TlsContext> TlsContext::create(const CertConfig& cfg){
         X509_sign(cert, pkey, EVP_sha256());
         ctx->caCert_ = cert; ctx->caKey_ = pkey; ctx->init_ok_ = true;
         // Persist if paths given
-        if (!cfg.caCertPath.empty()) { FILE* f = fopen(cfg.caCertPath.c_str(), "wb"); if(f){ PEM_write_X509(f, cert); fclose(f);} }
-        if (!cfg.caKeyPath.empty())  { FILE* f = fopen(cfg.caKeyPath.c_str(), "wb"); if(f){ PEM_write_PrivateKey(f, pkey, nullptr, nullptr, 0, nullptr, nullptr); fclose(f);} }
+        {
+            FILE* f = fopen(caCertPath.c_str(), "wb"); if(f){ PEM_write_X509(f, cert); fclose(f);} 
+        }
+        {
+            FILE* f = fopen(caKeyPath.c_str(), "wb"); if(f){ PEM_write_PrivateKey(f, pkey, nullptr, nullptr, 0, nullptr, nullptr); fclose(f);} 
+        }
+        ctx->cfg_.caCertPath = caCertPath;        
+        ctx->cfg_.caKeyPath = caKeyPath;
+        log_fpr(cert);
     } else {
+        fprintf(stdout, "[INFO] %lld loading existing root CA (cert=%s key=%s)\n", (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count(), caCertPath.c_str(), caKeyPath.c_str());
         // Load existing
-        FILE* fcert = fopen(cfg.caCertPath.c_str(), "rb"); if (fcert) { ctx->caCert_ = PEM_read_X509(fcert, nullptr, nullptr, nullptr); fclose(fcert);} 
-        FILE* fkey  = fopen(cfg.caKeyPath.c_str(),  "rb"); if (fkey)  { ctx->caKey_  = PEM_read_PrivateKey(fkey, nullptr, nullptr, nullptr); fclose(fkey);} 
+        FILE* fcert = fopen(caCertPath.c_str(), "rb"); if (fcert) { ctx->caCert_ = PEM_read_X509(fcert, nullptr, nullptr, nullptr); fclose(fcert);} 
+        FILE* fkey  = fopen(caKeyPath.c_str(),  "rb"); if (fkey)  { ctx->caKey_  = PEM_read_PrivateKey(fkey, nullptr, nullptr, nullptr); fclose(fkey);} 
         if (ctx->caCert_ && ctx->caKey_) ctx->init_ok_ = true;
+        ctx->cfg_.caCertPath = caCertPath;
+        ctx->cfg_.caKeyPath = caKeyPath;
+        log_fpr(ctx->caCert_);
     }
     if (ctx->init_ok_) {
         ctx->clientCtx_ = SSL_CTX_new(TLS_client_method());
@@ -87,6 +112,15 @@ TlsContext::LeafCertKey TlsContext::generate_leaf(const std::string& hostname) {
     // SubjectAltName
     std::string san = "DNS:" + hostname;
     X509_EXTENSION* ext = X509V3_EXT_conf_nid(nullptr, nullptr, NID_subject_alt_name, (char*)san.c_str());
+    if (ext) { X509_add_ext(cert, ext, -1); X509_EXTENSION_free(ext); }
+    // Extended Key Usage (server auth)
+    ext = X509V3_EXT_conf_nid(nullptr, nullptr, NID_ext_key_usage, (char*)"serverAuth");
+    if (ext) { X509_add_ext(cert, ext, -1); X509_EXTENSION_free(ext); }
+    // Basic constraints CA:FALSE
+    ext = X509V3_EXT_conf_nid(nullptr, nullptr, NID_basic_constraints, (char*)"CA:FALSE");
+    if (ext) { X509_add_ext(cert, ext, -1); X509_EXTENSION_free(ext); }
+    // Key usage for TLS server cert
+    ext = X509V3_EXT_conf_nid(nullptr, nullptr, NID_key_usage, (char*)"digitalSignature,keyEncipherment");
     if (ext) { X509_add_ext(cert, ext, -1); X509_EXTENSION_free(ext); }
     X509_sign(cert, caKey_, EVP_sha256());
     out.cert = cert; out.pkey = pkey; return out;

@@ -1,4 +1,4 @@
-# Observathor
+# Observathor  (WIP)
 
 Cross-platform open-source HTTP(S) interception and inspection proxy (early prototype).
 
@@ -128,6 +128,12 @@ Internal HTTP endpoints (available regardless of MITM enabled state):
 ```
 http://<proxy_host>:<port>/__observathor/ca.pem
 http://<proxy_host>:<port>/__observathor/ca.der
+.\build\Debug\observathor_imgui.exe --port 8888```
+**Short URLs for convenience (PEM format):**
+```
+http://<proxy_host>:<port>/ssl
+http://<proxy_host>:<port>/ca
+http://<proxy_host>:<port>/cert
 ```
 These serve the same root CA the process generated/loaded at startup.
 
@@ -200,9 +206,15 @@ Internal HTTP endpoints for device trust (active even if MITM not yet enabled):
 http://<proxy_host>:<port>/__observathor/ca.pem
 http://<proxy_host>:<port>/__observathor/ca.der
 ```
+**Short URLs for convenience (PEM format):**
+```
+http://<proxy_host>:<port>/ssl
+http://<proxy_host>:<port>/ca  
+http://<proxy_host>:<port>/cert
+```
 Usage:
 1. Connect mobile device to the same network. Configure its HTTP(S) proxy settings to point to the machine running Observathor (host & port).
-2. In the mobile browser visit `http://proxy_host:port/__observathor/ca.pem` (or `.der`).
+2. In the mobile browser visit `http://proxy_host:port/ssl` (or any of the URLs above).
 3. Download & install the certificate (platform prompts):
 	- Android: Settings -> Security -> Encryption & credentials -> Install a certificate -> CA certificate.
 	- iOS: Open link, allow download, then Settings -> Profile Downloaded -> Install (may need to enable under Settings -> General -> About -> Certificate Trust Settings).
